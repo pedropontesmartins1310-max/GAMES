@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pixel Platform Boss Rush</title>
+  <link rel="stylesheet" href="visual.css">
+</head>
+<body>
+  <div class="hud">Use W A S D to move. Level: 1 / 5</div>
+  <canvas id="gameCanvas" width="800" height="450"></canvas>
+  <div class="credit">Made by Pedro PM with the help of Copilot</div>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const hud = document.querySelector('.hud');
+
+    const keys = { w: false, a: false, s: false, d: false };
+    const gravity = 0.6;
+
+    const levels = [
+      {
+        platforms: [
+          { x: 0, y: 420, w: 800, h: 40 },
+          { x: 170, y: 320, w: 95, h: 14 },
+          { x: 360, y: 285, w: 85, h: 14 },
+          { x: 545, y: 225, w: 80, h: 14 },
+          { x: 270, y: 225, w: 70, h: 14 }
+        ],
+        goal: { x: 740, y: 182, w: 38, h: 38 }
+      },
+      {
+        platforms: [
+          { x: 0, y: 410, w: 800, h: 40 },
+          { x: 95, y: 350, w: 80, h: 14 },
+          { x: 250, y: 300, w: 80, h: 14 },
+          { x: 415, y: 245, w: 78, h: 14 },
+          { x: 610, y: 185, w: 90, h: 14 },
+          { x: 320, y: 200, w: 64, h: 14 }
+        ],
+        goal: { x: 740, y: 158, w: 38, h: 38 }
+      },
+      {
+        platforms: [
+          { x: 0, y: 410, w: 800, h: 40 },
+          { x: 150, y: 360, w: 100, h: 14 },
+          { x: 385, y: 305, w: 84, h: 14 },
+          { x: 575, y: 245, w: 86, h: 14 },
+          { x: 235, y: 205, w: 68, h: 14 },
+          { x: 635, y: 155, w: 72, h: 14 }
+        ],
+        goal: { x: 740, y: 190, w: 38, h: 38 }
+      },
+      {
+        platforms: [
+          { x: 0, y: 410, w: 800, h: 40 },
+          { x: 50, y: 330, w: 80, h: 14 },
+          { x: 220, y: 280, w: 76, h: 14 },
+          { x: 420, y: 230, w: 76, h: 14 },
+          { x: 600, y: 320, w: 84, h: 14 },
+          { x: 620, y: 180, w: 90, h: 14 },
+          { x: 315, y: 180, w: 64, h: 14 }
+        ],
+        goal: { x: 740, y: 140, w: 38, h: 38 }
+      },
+      {
+        platforms: [
+          { x: 0, y: 410, w: 800, h: 40 },
+          { x: 95, y: 355, w: 92, h: 14 },
+          { x: 275, y: 305, w: 78, h: 14 },
+          { x: 465, y: 255, w: 78, h: 14 },
+          { x: 610, y: 205, w: 72, h: 14 },
+          { x: 175, y: 205, w: 66, h: 14 },
+          { x: 350, y: 155, w: 70, h: 14 }
+        ],
+        goal: { x: 740, y: 120, w: 38, h: 38 },
+        boss: { x: 600, y: 338, w: 64, h: 64, vx: 2.3, hp: 5 }
+      }
+    ];
+
+    let levelIndex = 0;
+    const player = { x: 50, y: 360, w: 28, h: 38, vx: 0, vy: 0, speed: 3.8, jump: 11.5, onGround: false, lives: 2 };
+    let currentLevel;
+    let boss;
+    let gameOver = false;
+    let won = false;
+
+    function startLevel(index) {
+      levelIndex = Math.min(Math.max(index, 0), levels.length - 1);
+      currentLevel = JSON.parse(JSON.stringify(levels[levelIndex]));
+      player.x = 50;
+      player.y = 360;
+      player.vx = 0;
+      player.vy = 0;
+      player.onGround = false;
+      boss = currentLevel.boss ? { ...currentLevel.boss } : null;
+      gameOver = false;
+      won = false;
+      updateInfo();
+    }
+
+    function updateInfo() {
+      hud.textContent = `Use W A S D to move. Level: ${levelIndex + 1} / 5${boss ? ` • Boss HP: ${boss.hp}` : ''}`;
+    }
+
+    function rectsIntersect(a, b) {
+      return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    }
+
+    function drawBackdrop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#13233d';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#223b5d';
+      for (let i = 0; i < 18; i += 1) {
+        const x = (i * 47) % 780 + 20;
+        const y = (i * 31) % 320 + 30;
+        ctx.fillRect(x, y, 3, 3);
+      }
+      ctx.fillStyle = '#3e7d2f';
+      ctx.fillRect(0, 380, canvas.width, 70);
+      ctx.fillStyle = '#2d5f24';
+      ctx.fillRect(0, 395, canvas.width, 55);
+      ctx.fillStyle = '#7ec6ff';
+      ctx.fillRect(0, 0, canvas.width, 80);
+    }
+
+    function drawPlatform(p) {
+      ctx.fillStyle = '#7a4c2b';
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.fillStyle = '#b56e3c';
+      ctx.fillRect(p.x, p.y, p.w, 3);
+      ctx.fillStyle = '#4f2b16';
+      ctx.fillRect(p.x, p.y + p.h - 3, p.w, 3);
+      ctx.fillStyle = '#f3d7a6';
+      ctx.fillRect(p.x + 4, p.y + 3, Math.max(6, p.w - 8), 3);
+    }
+
+    function drawPlayer() {
+      ctx.fillStyle = '#f5c48d';
+      ctx.fillRect(player.x + 6, player.y + 2, 16, 14);
+      ctx.fillStyle = '#d84b4b';
+      ctx.fillRect(player.x, player.y + 14, 28, 18);
+      ctx.fillStyle = '#234a8b';
+      ctx.fillRect(player.x + 4, player.y + 28, 20, 10);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(player.x + 8, player.y + 8, 3, 3);
+      ctx.fillRect(player.x + 17, player.y + 8, 3, 3);
+    }
+
+    function drawBoss() {
+      ctx.fillStyle = '#5b8f35';
+      ctx.fillRect(boss.x, boss.y + 10, boss.w, 40);
+      ctx.fillRect(boss.x + 8, boss.y, boss.w - 16, 16);
+      ctx.fillStyle = '#2f5f1d';
+      ctx.fillRect(boss.x + 12, boss.y + 22, boss.w - 24, 12);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(boss.x + 18, boss.y + 12, 4, 4);
+      ctx.fillRect(boss.x + 42, boss.y + 12, 4, 4);
+      ctx.fillStyle = '#f1c230';
+      ctx.fillRect(boss.x + 14, boss.y - 8, 8, 8);
+      ctx.fillRect(boss.x + 38, boss.y - 8, 8, 8);
+    }
+
+    function drawGoal() {
+      if (boss) {
+        ctx.fillStyle = '#5a3d12';
+      } else {
+        ctx.fillStyle = '#22d3ee';
+      }
+      ctx.fillRect(currentLevel.goal.x, currentLevel.goal.y, currentLevel.goal.w, currentLevel.goal.h);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(currentLevel.goal.x + 10, currentLevel.goal.y + 10, 18, 18);
+    }
+
+    function applyPhysics() {
+      if (keys.a) player.vx = -player.speed;
+      else if (keys.d) player.vx = player.speed;
+      else player.vx = 0;
+      if (keys.w && player.onGround) {
+        player.vy = -player.jump;
+        player.onGround = false;
+      }
+      if (keys.s && !player.onGround) {
+        player.vy += 0.4;
+      }
+      player.vy += gravity;
+      player.x += player.vx;
+      player.y += player.vy;
+      if (player.x < 0) player.x = 0;
+      if (player.x + player.w > canvas.width) player.x = canvas.width - player.w;
+      if (player.y + player.h > canvas.height) {
+        player.y = canvas.height - player.h;
+        player.vy = 0;
+        player.onGround = true;
+      }
+      player.onGround = false;
+      currentLevel.platforms.forEach(p => {
+        if (rectsIntersect(player, p)) {
+          if (player.vy > 0 && player.y + player.h - player.vy <= p.y) {
+            player.y = p.y - player.h;
+            player.vy = 0;
+            player.onGround = true;
+          } else if (player.vx > 0) {
+            player.x = p.x - player.w;
+          } else if (player.vx < 0) {
+            player.x = p.x + p.w;
+          }
+        }
+      });
+    }
+
+    function updateBoss() {
+      if (!boss) return;
+      boss.x += boss.vx;
+      if (boss.x < 500 || boss.x + boss.w > 760) boss.vx *= -1;
+      if (rectsIntersect(player, boss)) {
+        player.x = 50;
+        player.y = 360;
+        player.vx = 0;
+        player.vy = 0;
+        player.lives -= 1;
+        if (player.lives <= 0) {
+          gameOver = true;
+        }
+      }
+      if (player.y + player.h > boss.y && player.y < boss.y + boss.h && player.vy > 0 && player.x + player.w > boss.x && player.x < boss.x + boss.w) {
+        boss.hp -= 1;
+        player.vy = -player.jump / 1.5;
+        if (boss.hp <= 0) {
+          boss = null;
+          currentLevel.goal.x = 740;
+          currentLevel.goal.y = 120;
+        }
+      }
+    }
+
+    function update() {
+      if (gameOver || won) return;
+      applyPhysics();
+      updateBoss();
+      if (boss) {
+        updateInfo();
+        return;
+      }
+      if (rectsIntersect(player, currentLevel.goal)) {
+        if (levelIndex < levels.length - 1) startLevel(levelIndex + 1);
+        else {
+          won = true;
+          gameOver = true;
+        }
+      }
+      updateInfo();
+    }
+
+    function draw() {
+      drawBackdrop();
+      currentLevel.platforms.forEach(drawPlatform);
+      drawGoal();
+      drawPlayer();
+      if (boss) drawBoss();
+      if (gameOver) {
+        ctx.fillStyle = 'rgba(0,0,0,0.72)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#fff';
+        ctx.font = '36px monospace';
+        ctx.fillText(won ? 'You win!' : 'Game Over', 290, 230);
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener('keydown', e => {
+      const key = e.key.toLowerCase();
+      if (key === 'a') keys.a = true;
+      if (key === 'd') keys.d = true;
+      if (key === 'w') keys.w = true;
+      if (key === 's') keys.s = true;
+    });
+
+    window.addEventListener('keyup', e => {
+      const key = e.key.toLowerCase();
+      if (key === 'a') keys.a = false;
+      if (key === 'd') keys.d = false;
+      if (key === 'w') keys.w = false;
+      if (key === 's') keys.s = false;
+    });
+
+    startLevel(0);
+    loop();
+  </script>
+</body>
+</html>
