@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<title>Pong - Green & Black</title>
+	<style>
+		:root{--bg:#05150a;--panel:rgba(3,16,9,.86);--line:#1d6232;--paddle:#8fffb8;--ball:#61f0a8;--text:#b8ffd0;--border:#185c33}
+		*{box-sizing:border-box}
+		html,body{height:100%;margin:0;background:radial-gradient(circle at top,#0c2313 0%,var(--bg) 60%,#020804 100%);display:flex;align-items:center;justify-content:center;font-family:Segoe UI,Arial,sans-serif}
+		body{padding:24px}
+		.game-shell{display:flex;flex-direction:column;align-items:center;gap:14px}
+		.panel{width:min(920px,92vw);display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;border:1px solid var(--border);border-radius:16px;background:var(--panel);box-shadow:0 12px 34px rgba(0,0,0,.38);backdrop-filter:blur(8px)}
+		.title{font-size:1rem;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--text)}
+		.hud{display:flex;flex-direction:column;gap:4px}
+		.status{color:#d7ffe6;font-size:.95rem}
+		.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+		label{color:var(--text);font-size:.95rem}
+		select,button{background:#031307;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font:inherit}
+		button{cursor:pointer;transition:transform .12s ease, background .12s ease}
+		button:hover{transform:translateY(-1px);background:#082711}
+		canvas{background:linear-gradient(180deg,#06140c,#041009);box-shadow:0 16px 44px rgba(0,0,0,.42);border:3px solid var(--border);border-radius:16px;max-width:100%}
+		.credit{position:fixed;left:14px;bottom:12px;color:rgba(184,255,208,.75);font-size:.8rem;letter-spacing:.04em}
+	</style>
+</head>
+<body>
+	<div class="game-shell">
+		<div class="panel">
+			<div class="hud">
+				<div class="title">Retro Pong</div>
+				<div id="status" class="status">First to 5 wins</div>
+			</div>
+			<div class="controls">
+				<label for="modeSelect">Mode</label>
+				<select id="modeSelect">
+					<option value="single">1 Player</option>
+					<option value="two">2 Players</option>
+				</select>
+				<button id="resetBtn" type="button">Reset Match</button>
+			</div>
+		</div>
+		<canvas id="c" width="900" height="500"></canvas>
+	</div>
+	<div class="credit">Made by Pedro PM with the help of Copilot</div>
+	<script>
+		const cvs = document.getElementById('c');
+		const ctx = cvs.getContext('2d');
+		const W = cvs.width, H = cvs.height;
+		const modeSelect = document.getElementById('modeSelect');
+		const resetBtn = document.getElementById('resetBtn');
+		const status = document.getElementById('status');
+
+		const theme = {
+			bg:'#041009', court:'#06140c', line:'#1d6232', paddle:'#8fffb8', ball:'#61f0a8', text:'#b8ffd0'
+		};
+
+		let mode = 'single';
+		let gameOver = false;
+		let winner = null;
+		let left = {x:20,y:H/2-50,w:12,h:100,score:0};
+		let right = {x:W-32,y:H/2-50,w:12,h:100,score:0};
+		let ball = {x:W/2,y:H/2,r:8,vx:5*(Math.random()>0.5?1:-1),vy:3*(Math.random()>0.5?1:-1)};
+		let keys = {};
+
+		function resetBall(dir){
+			ball.x = W/2; ball.y = H/2;
+			const speed = 5.2;
+			ball.vx = speed * (dir || (Math.random()>0.5?1:-1));
+			ball.vy = (Math.random()*4-2);
+		}
+
+		function updateStatus(){
+			status.textContent = mode === 'single'
+				? 'Single player • W/S move • first to 5 wins'
+				: 'Two players • W/S and ↑/↓ move • first to 5 wins';
+		}
+
+		function resetGame(){
+			left.score = 0; right.score = 0;
+			left.y = H/2-50; right.y = H/2-50;
+			gameOver = false; winner = null;
+			updateStatus();
+			resetBall();
+		}
+
+		function setKey(key, pressed){
+			const normalized = key.toLowerCase();
+			if(normalized === 'arrowup') keys.arrowup = pressed;
+			else if(normalized === 'arrowdown') keys.arrowdown = pressed;
+			else if(normalized === 'w') keys.w = pressed;
+			else if(normalized === 's') keys.s = pressed;
+			else if(normalized === 'r') keys.r = pressed;
+		}
+
+		document.addEventListener('keydown', e=>{
+			const key = e.key.toLowerCase();
+			if(['w','s','arrowup','arrowdown','r'].includes(key)){
+				e.preventDefault();
+			}
+			setKey(key, true);
+			if(key === 'r') resetGame();
+		});
+		document.addEventListener('keyup', e=>{ setKey(e.key.toLowerCase(), false); });
+		window.addEventListener('blur', ()=>{ keys = {}; });
+
+		modeSelect.addEventListener('change', ()=>{
+			mode = modeSelect.value;
+			resetGame();
+		});
+		resetBtn.addEventListener('click', resetGame);
+
+		function drawRoundedRect(x,y,w,h,r,color){ ctx.fillStyle=color; ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.fill(); }
+
+		function draw(){
+			ctx.fillStyle = theme.bg; ctx.fillRect(0,0,W,H);
+			ctx.strokeStyle = theme.line; ctx.lineWidth=4; ctx.setLineDash([16,12]); ctx.beginPath(); ctx.moveTo(W/2,10); ctx.lineTo(W/2,H-10); ctx.stroke(); ctx.setLineDash([]);
+			ctx.fillStyle = theme.text; ctx.font='42px monospace'; ctx.textAlign='center'; ctx.fillText(left.score, W*0.25,50); ctx.fillText(right.score, W*0.75,50);
+			drawRoundedRect(left.x,left.y,left.w,left.h,6,theme.paddle);
+			drawRoundedRect(right.x,right.y,right.w,right.h,6,theme.paddle);
+			ctx.fillStyle = theme.ball; ctx.beginPath(); ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2); ctx.fill();
+
+			if(gameOver){
+				ctx.fillStyle = theme.text; ctx.font='24px monospace'; ctx.fillText(`${winner} wins!`, W/2, H/2 - 20);
+				ctx.font='16px monospace'; ctx.fillText('Press R or Reset Match to play again', W/2, H/2 + 12);
+			}
+		}
+
+		function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+		function update(){
+			if(gameOver) return;
+
+			if(keys.w) left.y -= 7; if(keys.s) left.y += 7;
+			left.y = clamp(left.y, 8, H-left.h-8);
+
+			if(mode === 'single'){
+				const target = ball.y - right.h/2;
+				if(Math.abs(target - right.y) > 8) right.y += (target>right.y?5: -5);
+				right.y = clamp(right.y,8,H-right.h-8);
+			} else {
+				if(keys.arrowup) right.y -= 7;
+				if(keys.arrowdown) right.y += 7;
+				right.y = clamp(right.y,8,H-right.h-8);
+			}
+
+			ball.x += ball.vx; ball.y += ball.vy;
+
+			if(ball.y - ball.r <= 6 || ball.y + ball.r >= H-6){ ball.vy *= -1; }
+
+			function reflect(p){
+				if(ball.x - ball.r < p.x + p.w && ball.x + ball.r > p.x && ball.y + ball.r > p.y && ball.y - ball.r < p.y + p.h){
+					if(p===left) ball.x = left.x + left.w + ball.r; else ball.x = right.x - ball.r;
+					const hitPos = (ball.y - (p.y + p.h/2)) / (p.h/2);
+					ball.vx = -ball.vx * 1.05;
+					ball.vy += hitPos * 4;
+				}
+			}
+			reflect(left); reflect(right);
+
+			if(ball.x < -20){
+				right.score++;
+				if(right.score >= 5){
+					gameOver = true; winner = 'Right Player'; status.textContent = 'Right Player wins!';
+				} else {
+					resetBall(1);
+				}
+			}
+			if(ball.x > W+20){
+				left.score++;
+				if(left.score >= 5){
+					gameOver = true; winner = 'Left Player'; status.textContent = 'Left Player wins!';
+				} else {
+					resetBall(-1);
+				}
+			}
+		}
+
+		function loop(){ update(); draw(); requestAnimationFrame(loop); }
+		updateStatus();
+		resetGame();
+		loop();
+	</script>
+</body>
+</html>
