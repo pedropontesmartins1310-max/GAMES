@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pixel Snake</title>
+    <style>
+        body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; background: #101013; color: #f1f1f1; font-family: Arial, sans-serif; }
+        h1 { margin: 20px 0 10px; }
+        #menu { width: min(360px, 92vw); display: grid; gap: 12px; padding: 14px; box-shadow: 0 0 18px rgba(0,0,0,0.35); border-radius: 12px; background: rgba(22,22,28,0.95); }
+        label { display: block; margin-bottom: 4px; font-size: 0.96rem; }
+        select, input[type=range], button { width: 100%; padding: 10px 12px; font-size: 1rem; border-radius: 8px; border: 1px solid #333; background: #1d1d23; color: #f1f1f1; }
+        button { cursor: pointer; border: 1px solid #5b8cff; background: #3c5fd2; }
+        button:hover { background: #517ee5; }
+        #speedControl { display: flex; align-items: center; gap: 8px; }
+        #speedControl label { display: inline-block; margin-bottom: 0; white-space: nowrap; }
+        #speed { width: 110px; padding: 0; }
+        #game { margin-top: 18px; border: 4px solid #f1f1f1; background: #050505; image-rendering: pixelated; }
+        #info { margin: 14px 0 24px; text-align: center; }
+        #info div { margin: 6px 0; }
+        #credit { position: fixed; left: 12px; bottom: 12px; font-size: 0.8rem; color: rgba(241,241,241,0.6); pointer-events: none; }
+    </style>
+</head>
+<body>
+    <h1>Pixel Snake</h1>
+    <div id="menu">
+        <div id="speedControl">
+            <label for="speed">Speed: <span id="speedValue">5</span></label>
+            <input type="range" id="speed" min="1" max="10" value="5">
+        </div>
+        <div>
+            <label for="mapSize">Map size</label>
+            <select id="mapSize">
+                <option value="small">Small</option>
+                <option value="medium" selected>Medium</option>
+                <option value="large">Large</option>
+            </select>
+        </div>
+        <div>
+            <label for="appleCount">Apples</label>
+            <select id="appleCount">
+                <option value="few">Few</option>
+                <option value="normal" selected>Normal</option>
+                <option value="many">Many</option>
+            </select>
+        </div>
+        <button id="startButton">Start Game</button>
+    </div>
+    <canvas id="game" width="400" height="400"></canvas>
+    <div id="info">
+        <div>Score: <span id="score">0</span></div>
+        <div id="message">Use the arrow keys to move.</div>
+    </div>
+    <div id="credit">Made by Pedro PM with the help of Copilot</div>
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const speedInput = document.getElementById('speed');
+        const speedValue = document.getElementById('speedValue');
+        const mapSizeSelect = document.getElementById('mapSize');
+        const appleCountSelect = document.getElementById('appleCount');
+        const startButton = document.getElementById('startButton');
+        const scoreLabel = document.getElementById('score');
+        const messageLabel = document.getElementById('message');
+
+        let gridSize = 20;
+        let tileSize = 20;
+        let snake = [];
+        let direction = { x: 1, y: 0 };
+        let nextDirection = { x: 1, y: 0 };
+        let apples = [];
+        let appleCount = 2;
+        let score = 0;
+        let intervalId = null;
+        let isRunning = false;
+
+        speedValue.textContent = speedInput.value;
+
+        speedInput.addEventListener('input', () => {
+            speedValue.textContent = speedInput.value;
+        });
+
+        function getMapSize() {
+            const value = mapSizeSelect.value;
+            if (value === 'small') return 15;
+            if (value === 'large') return 25;
+            return 20;
+        }
+
+        function getAppleCount() {
+            const value = appleCountSelect.value;
+            if (value === 'few') return 1;
+            if (value === 'many') return 4;
+            return 2;
+        }
+
+        function getInterval() {
+            const speed = Number(speedInput.value);
+            return 320 - (speed - 1) * 26;
+        }
+
+        function resizeCanvas() {
+            canvas.width = gridSize * tileSize;
+            canvas.height = gridSize * tileSize;
+        }
+
+        function resetGame() {
+            gridSize = getMapSize();
+            tileSize = Math.floor(400 / gridSize);
+            resizeCanvas();
+            appleCount = getAppleCount();
+            snake = [{ x: Math.floor(gridSize / 2), y: Math.floor(gridSize / 2) }];
+            direction = { x: 1, y: 0 };
+            nextDirection = { x: 1, y: 0 };
+            apples = [];
+            score = 0;
+            scoreLabel.textContent = score;
+            messageLabel.textContent = 'Use the arrow keys to move.';
+            isRunning = true;
+            placeApples();
+            draw();
+        }
+
+        function placeApples() {
+            while (apples.length < appleCount) {
+                const candidate = {
+                    x: Math.floor(Math.random() * gridSize),
+                    y: Math.floor(Math.random() * gridSize)
+                };
+                const collision = snake.some(segment => segment.x === candidate.x && segment.y === candidate.y) ||
+                    apples.some(apple => apple.x === candidate.x && apple.y === candidate.y);
+                if (!collision) apples.push(candidate);
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#e74c3c';
+            apples.forEach(apple => {
+                ctx.fillRect(apple.x * tileSize, apple.y * tileSize, tileSize, tileSize);
+            });
+
+            snake.forEach((segment, index) => {
+                ctx.fillStyle = index === 0 ? '#8aff8a' : '#3fd13f';
+                ctx.fillRect(segment.x * tileSize, segment.y * tileSize, tileSize, tileSize);
+            });
+        }
+
+        function gameOver() {
+            isRunning = false;
+            clearInterval(intervalId);
+            intervalId = null;
+            messageLabel.textContent = 'Game over. Press Start Game to play again.';
+        }
+
+        function step() {
+            direction = nextDirection;
+            const head = snake[0];
+            const nextHead = {
+                x: (head.x + direction.x + gridSize) % gridSize,
+                y: (head.y + direction.y + gridSize) % gridSize
+            };
+
+            if (snake.some(segment => segment.x === nextHead.x && segment.y === nextHead.y)) {
+                gameOver();
+                return;
+            }
+
+            snake.unshift(nextHead);
+            const appleIndex = apples.findIndex(apple => apple.x === nextHead.x && apple.y === nextHead.y);
+            if (appleIndex >= 0) {
+                apples.splice(appleIndex, 1);
+                score += 1;
+                scoreLabel.textContent = score;
+                placeApples();
+            } else {
+                snake.pop();
+            }
+
+            draw();
+        }
+
+        window.addEventListener('keydown', event => {
+            if (!isRunning) return;
+            const key = event.key;
+            if (key === 'ArrowUp' && direction.y === 0) {
+                nextDirection = { x: 0, y: -1 };
+                event.preventDefault();
+            }
+            if (key === 'ArrowDown' && direction.y === 0) {
+                nextDirection = { x: 0, y: 1 };
+                event.preventDefault();
+            }
+            if (key === 'ArrowLeft' && direction.x === 0) {
+                nextDirection = { x: -1, y: 0 };
+                event.preventDefault();
+            }
+            if (key === 'ArrowRight' && direction.x === 0) {
+                nextDirection = { x: 1, y: 0 };
+                event.preventDefault();
+            }
+        });
+
+        startButton.addEventListener('click', () => {
+            if (intervalId) clearInterval(intervalId);
+            resetGame();
+            intervalId = setInterval(step, getInterval());
+        });
+
+        resetGame();
+    </script>
+</body>
+</html>
